@@ -13,7 +13,7 @@ function ArticuloDetail() {
   const { data, isLoading } = useQuery({
     queryKey: ["articulo", id],
     queryFn: async () => {
-      const [art, compras, ventas] = await Promise.all([
+      const [art, compras, ventas, ajustes] = await Promise.all([
         supabase.from("articulos").select("*").eq("id", id).maybeSingle(),
         supabase.from("lineas_albaran_compra")
           .select("id, cantidad, precio_unitario_neto, total_linea, albaranes_compra!inner(fecha, proveedor, numero_albaran)")
@@ -25,8 +25,13 @@ function ArticuloDetail() {
           .eq("articulo_id", id)
           .order("created_at", { ascending: false })
           .limit(50),
+        supabase.from("ajustes_stock")
+          .select("id, tipo, cantidad, motivo, stock_antes, stock_despues, created_at")
+          .eq("articulo_id", id)
+          .order("created_at", { ascending: false })
+          .limit(50),
       ]);
-      return { articulo: art.data, compras: compras.data ?? [], ventas: ventas.data ?? [] };
+      return { articulo: art.data, compras: compras.data ?? [], ventas: ventas.data ?? [], ajustes: ajustes.data ?? [] };
     },
   });
 
@@ -58,6 +63,7 @@ function ArticuloDetail() {
         <TabsList>
           <TabsTrigger value="compras">Histórico de compras ({data.compras.length})</TabsTrigger>
           <TabsTrigger value="ventas">Histórico de usos ({data.ventas.length})</TabsTrigger>
+          <TabsTrigger value="ajustes">Ajustes manuales ({data.ajustes.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="compras" className="bg-card border border-border rounded-lg overflow-hidden">
@@ -104,6 +110,44 @@ function ArticuloDetail() {
                 </tr>
               ))}
               {!data.ventas.length && <tr><td colSpan={6} className="text-center py-6 text-muted-foreground">Sin usos registrados</td></tr>}
+            </tbody>
+          </table>
+        </TabsContent>
+
+        <TabsContent value="ajustes" className="bg-card border border-border rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="text-xs uppercase text-muted-foreground bg-sidebar">
+              <tr>
+                <th className="text-left px-3 py-2">Fecha</th>
+                <th className="text-left px-3 py-2">Tipo</th>
+                <th className="text-right px-3 py-2">Cant.</th>
+                <th className="text-right px-3 py-2">Antes</th>
+                <th className="text-right px-3 py-2">Después</th>
+                <th className="text-left px-3 py-2">Motivo</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {data.ajustes.map((aj: any) => {
+                const labels: Record<string, { txt: string; cls: string }> = {
+                  salida:     { txt: "Salida",     cls: "bg-orange-500/15 text-orange-200 border-orange-500/30" },
+                  entrada:    { txt: "Entrada",    cls: "bg-emerald-500/15 text-emerald-200 border-emerald-500/30" },
+                  correccion: { txt: "Corrección", cls: "bg-primary/15 text-primary border-primary/30" },
+                };
+                const l = labels[aj.tipo] ?? { txt: aj.tipo, cls: "" };
+                return (
+                  <tr key={aj.id}>
+                    <td className="px-3 py-2">{formatDate(aj.created_at)}</td>
+                    <td className="px-3 py-2">
+                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium border ${l.cls}`}>{l.txt}</span>
+                    </td>
+                    <td className="px-3 py-2 text-right font-medium">{aj.cantidad}</td>
+                    <td className="px-3 py-2 text-right text-muted-foreground">{aj.stock_antes}</td>
+                    <td className="px-3 py-2 text-right font-medium">{aj.stock_despues}</td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground">{aj.motivo ?? "—"}</td>
+                  </tr>
+                );
+              })}
+              {!data.ajustes.length && <tr><td colSpan={6} className="text-center py-6 text-muted-foreground">Sin ajustes manuales</td></tr>}
             </tbody>
           </table>
         </TabsContent>
